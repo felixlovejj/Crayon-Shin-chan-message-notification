@@ -1,0 +1,221 @@
+using System.Drawing;
+using System.IO;
+using System.Windows;
+using Microsoft.AspNetCore.Builder;
+using Microsoft.AspNetCore.Http;
+using Microsoft.Extensions.DependencyInjection;
+using Microsoft.Extensions.FileProviders;
+using WpfApplication = System.Windows.Application;
+using DrawingFontFamily = System.Drawing.FontFamily;
+using DrawingFontStyle = System.Drawing.FontStyle;
+
+namespace CrayonShinchanNotification;
+
+public partial class App : WpfApplication
+{
+    private MainWindow? _mainWindow;
+    private Thread? _apiThread;
+    private System.Windows.Forms.NotifyIcon? _notifyIcon;
+
+    protected override void OnStartup(StartupEventArgs e)
+    {
+        base.OnStartup(e);
+
+        // Setup system tray icon
+        SetupSystemTray();
+
+        // Start API server in background
+        _apiThread = new Thread(StartApiServer)
+        {
+            IsBackground = true,
+            Name = "APIServer"
+        };
+        _apiThread.Start();
+
+        // Create and show main window
+        _mainWindow = new MainWindow();
+        _mainWindow.Show();
+    }
+
+    private void SetupSystemTray()
+    {
+        _notifyIcon = new System.Windows.Forms.NotifyIcon();
+
+        // Create a simple icon (red circle with white "S")
+        var bitmap = new Bitmap(32, 32);
+        using (var g = Graphics.FromImage(bitmap))
+        {
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.AntiAlias;
+            g.Clear(System.Drawing.Color.Transparent);
+
+            // Red circle background
+            using var brush = new SolidBrush(System.Drawing.Color.FromArgb(204, 0, 0));
+            g.FillEllipse(brush, 2, 2, 28, 28);
+
+            // White "S" letter
+            using var font = new Font(new DrawingFontFamily("Arial"), 16, DrawingFontStyle.Bold);
+            using var textBrush = new SolidBrush(System.Drawing.Color.White);
+            var sf = new StringFormat { Alignment = StringAlignment.Center, LineAlignment = StringAlignment.Center };
+            g.DrawString("S", font, textBrush, new RectangleF(0, 0, 32, 32), sf);
+        }
+
+        _notifyIcon.Icon = Icon.FromHandle(bitmap.GetHicon());
+        _notifyIcon.Text = "蜡笔小新消息通知";
+
+        // Context menu
+        var menu = new System.Windows.Forms.ContextMenuStrip();
+        menu.Items.Add("打开 Web 界面", null, (s, ev) =>
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "http://127.0.0.1:8000/",
+                UseShellExecute = true
+            });
+        });
+        menu.Items.Add("测试动画", null, (s, ev) =>
+        {
+            Dispatcher.BeginInvoke(() =>
+            {
+                _mainWindow?.TriggerAnimation(new MessageData
+                {
+                    Type = "text",
+                    Content = "测试消息！",
+                    Timestamp = DateTime.Now
+                });
+            });
+        });
+        menu.Items.Add("-"); // Separator
+        menu.Items.Add("退出", null, (s, ev) =>
+        {
+            _notifyIcon!.Visible = false;
+            Shutdown();
+        });
+
+        _notifyIcon.ContextMenuStrip = menu;
+        _notifyIcon.Visible = true;
+
+        // Double-click to open web UI
+        _notifyIcon.DoubleClick += (s, ev) =>
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = "http://127.0.0.1:8000/",
+                UseShellExecute = true
+            });
+        };
+    }
+
+    private void StartApiServer()
+    {
+        // Configure URL via environment variable
+        Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://127.0.0.1:8000");
+
+        var builder = WebApplication.CreateBuilder();
+
+        // Add CORS services
+        builder.Services.AddCors();
+
+        var app = builder.Build();
+
+        // CORS for local development
+        app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+
+        // Serve static files (frontend)
+        var staticPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
+        if (Directory.Exists(staticPath))
+        {
+            app.UseStaticFiles(new StaticFileOptions
+            {
+                FileProvider = new PhysicalFileProvider(staticPath)
+            });
+        }
+
+        // GET / serves index.html
+        app.MapGet("/", () =>
+        {
+            var indexPath = Path.Combine(staticPath, "index.html");
+            return Results.File(indexPath, "text/html");
+        });
+
+        // POST /api/send - send text or image
+        app.MapPost("/api/send", async (HttpContext context) =>
+        {
+            var body = await context.Request.ReadFromJsonAsync<ApiMessage>();
+            if (body == null || string.IsNullOrEmpty(body.Content))
+                return Results.BadRequest(new { error = "Content is required" });
+
+            if (body.Type != "text" && body.Type != "image")
+                return Results.BadRequest(new { error = "Type must be 'text' or 'image'" });
+
+            var msg = new MessageData
+            {
+                Type = body.Type,
+                Content = body.Content,
+                Timestamp = DateTime.Now
+            };
+
+            // Trigger animation on WPF thread
+            _ = Dispatcher.BeginInvoke(() =>
+            {
+                _mainWindow?.TriggerAnimation(msg);
+            });
+
+            return Results.Ok(new { status = "ok", message = "Animation triggered" });
+        });
+
+        // POST /api/send-image - upload image file
+        app.MapPost("/api/send-image", async (HttpContext context) =>
+        {
+            var form = await context.Request.ReadFormAsync();
+            var file = form.Files.GetFile("file");
+            if (file == null || file.Length == 0)
+                return Results.BadRequest(new { error = "No file uploaded" });
+
+            if (file.Length > 5 * 1024 * 1024)
+                return Results.BadRequest(new { error = "File too large (max 5MB)" });
+
+            using var ms = new MemoryStream();
+            await file.CopyToAsync(ms);
+            var base64 = Convert.ToBase64String(ms.ToArray());
+
+            var msg = new MessageData
+            {
+                Type = "image",
+                Content = base64,
+                Timestamp = DateTime.Now
+            };
+
+            _ = Dispatcher.BeginInvoke(() =>
+            {
+                _mainWindow?.TriggerAnimation(msg);
+            });
+
+            return Results.Ok(new { status = "ok", message = "Image animation triggered" });
+        });
+
+        // GET /health
+        app.MapGet("/health", () => Results.Ok(new { status = "running" }));
+
+        Console.WriteLine("=========================================");
+        Console.WriteLine("  Crayon Shin-chan Notification");
+        Console.WriteLine("  API:  http://127.0.0.1:8000");
+        Console.WriteLine("  Web:  http://127.0.0.1:8000/");
+        Console.WriteLine("  托盘图标右键可以退出程序");
+        Console.WriteLine("=========================================");
+
+        app.Run();
+    }
+
+    protected override void OnExit(ExitEventArgs e)
+    {
+        _notifyIcon?.Dispose();
+        base.OnExit(e);
+        Environment.Exit(0);
+    }
+}
+
+public class ApiMessage
+{
+    public string Type { get; set; } = "text";
+    public string Content { get; set; } = "";
+}
