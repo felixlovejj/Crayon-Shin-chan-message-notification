@@ -21,11 +21,23 @@ public partial class App : WpfApplication
     private AutoUpdater? _autoUpdater;
     private ClientWebSocket? _relaySocket;
 
-    // Relay mode config
-    private static readonly bool RelayMode = Environment.GetEnvironmentVariable("RELAY_MODE") == "true";
-    private static readonly string RelayUrl = Environment.GetEnvironmentVariable("RELAY_URL") ?? "";
-    private static readonly string ClientName = Environment.GetEnvironmentVariable("CLIENT_NAME") ?? Environment.MachineName;
-    private static readonly string RelayApiKey = Environment.GetEnvironmentVariable("SHINCHAN_API_KEY") ?? "shinchan2024";
+    // Config
+    private static readonly AppConfig Config = LoadConfig();
+
+    private static AppConfig LoadConfig()
+    {
+        var configPath = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "config.json");
+        if (File.Exists(configPath))
+        {
+            try
+            {
+                var json = File.ReadAllText(configPath);
+                return JsonSerializer.Deserialize<AppConfig>(json) ?? new AppConfig();
+            }
+            catch { }
+        }
+        return new AppConfig();
+    }
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -65,7 +77,7 @@ public partial class App : WpfApplication
         _apiThread.Start();
 
         // Start relay connection if configured
-        if (RelayMode && !string.IsNullOrEmpty(RelayUrl))
+        if (Config.RelayMode && !string.IsNullOrEmpty(Config.RelayUrl))
         {
             _ = Task.Run(async () =>
             {
@@ -86,9 +98,9 @@ public partial class App : WpfApplication
             try
             {
                 _relaySocket = new ClientWebSocket();
-                var url = $"{RelayUrl}?name={Uri.EscapeDataString(ClientName)}";
+                var url = $"{Config.RelayUrl}?name={Uri.EscapeDataString(Config.ClientName)}";
                 await _relaySocket.ConnectAsync(new Uri(url), CancellationToken.None);
-                Console.WriteLine($"[Relay] 已连接到中继服务器: {RelayUrl}");
+                Console.WriteLine($"[Relay] 已连接到中继服务器: {Config.RelayUrl}");
 
                 _notifyIcon?.ShowBalloonTip(2000, "已连接", "中继服务器连接成功", System.Windows.Forms.ToolTipIcon.Info);
 
@@ -195,7 +207,6 @@ public partial class App : WpfApplication
     private void StartApiServer()
     {
         // Configure URL - listen on all interfaces for remote access
-        var apiKey = Environment.GetEnvironmentVariable("SHINCHAN_API_KEY") ?? "shinchan2024";
         Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://0.0.0.0:8000");
 
         var builder = WebApplication.CreateBuilder();
@@ -215,7 +226,7 @@ public partial class App : WpfApplication
             // Only require API key for message sending endpoints
             if (path.StartsWith("/api/send"))
             {
-                if (!context.Request.Headers.TryGetValue("X-Api-Key", out var key) || key != apiKey)
+                if (!context.Request.Headers.TryGetValue("X-Api-Key", out var key) || key != Config.ApiKey)
                 {
                     context.Response.StatusCode = 401;
                     await context.Response.WriteAsJsonAsync(new { error = "Invalid or missing API key" });
@@ -321,18 +332,18 @@ public partial class App : WpfApplication
 
         Console.WriteLine("=========================================");
         Console.WriteLine("  Crayon Shin-chan Notification");
-        if (RelayMode)
+        if (Config.RelayMode)
         {
             Console.WriteLine("  Mode:  Relay (中继模式)");
-            Console.WriteLine($"  Relay: {RelayUrl}");
-            Console.WriteLine($"  Name:  {ClientName}");
+            Console.WriteLine($"  Relay: {Config.RelayUrl}");
+            Console.WriteLine($"  Name:  {Config.ClientName}");
         }
         else
         {
             Console.WriteLine("  API:  http://0.0.0.0:8000");
             Console.WriteLine("  Web:  http://localhost:8000/");
         }
-        Console.WriteLine($"  API Key: {RelayApiKey}");
+        Console.WriteLine($"  API Key: {Config.ApiKey}");
         Console.WriteLine("  托盘图标右键可以退出程序");
         Console.WriteLine("=========================================");
 
@@ -352,4 +363,12 @@ public class ApiMessage
 {
     public string Type { get; set; } = "text";
     public string Content { get; set; } = "";
+}
+
+public class AppConfig
+{
+    public bool RelayMode { get; set; } = false;
+    public string RelayUrl { get; set; } = "";
+    public string ClientName { get; set; } = Environment.MachineName;
+    public string ApiKey { get; set; } = "shinchan2024";
 }
