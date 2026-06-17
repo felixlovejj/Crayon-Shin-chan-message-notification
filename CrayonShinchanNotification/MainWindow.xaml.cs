@@ -54,7 +54,12 @@ public partial class MainWindow : Window
     private double _charW, _bannerW, _totalDist, _totalDur;
     private double _charX, _charY;
     private double _banX, _banY, _banVX, _banVY;
-    private double _dustTimer;
+    
+    // Hand positions per frame (normalized 0-1 within GIF frame 272x724)
+    // Provided by user for rope attachment
+    private static readonly double[] HandXN = { 194.0/233, 180.0/233, 150.0/233, 182.0/233, 195.0/233, 189.0/233, 148.0/233, 178.0/233 };
+    private static readonly double[] HandYN = { 161.0/291, 165.0/291, 180.0/291, 168.0/291, 159.0/291, 173.0/291, 178.0/291, 162.0/291 };
+private double _dustTimer;
     private readonly Random _rng = new();
 
     // ═══ Visual elements ═════════════════════════════════════════
@@ -107,9 +112,7 @@ public partial class MainWindow : Window
         {
             Width = _charW,
             Height = CharHeight,
-            Stretch = Stretch.Uniform,
-            RenderTransform = new ScaleTransform(-1, 1, 0.5, 0.5),
-            RenderTransformOrigin = new Point(0.5, 0.5)
+            Stretch = Stretch.Uniform
         };
         AnimationCanvas.Children.Add(_charImg);
 
@@ -279,7 +282,7 @@ public partial class MainWindow : Window
         // Entry scale animation
         double scale = 1.0;
         if (_elapsed < 0.3) scale = 0.85 + 0.15 * EaseOutCubic(_elapsed / 0.3);
-        _charImg.RenderTransform = new ScaleTransform(-scale, scale, 0.5, 0.5);
+        _charImg.RenderTransform = new ScaleTransform(scale, scale, 0.5, 0.5);
 
         // Opacity fade in/out
         double opacity = 1.0;
@@ -309,8 +312,9 @@ public partial class MainWindow : Window
         if (_banner == null) return;
 
         // Target: rope attachment point on character
-        double targetX = _charX + _charW * 0.85;
-        double targetY = _charY + CharHeight * 0.4;
+        int banFrame = (int)(_elapsed * SpriteFPS) % _sprites!.FrameCount;
+        double targetX = _charX + HandXN[banFrame] * _charW;
+        double targetY = _charY + HandYN[banFrame] * CharHeight;
 
         // Spring-damper: F = -k*x - c*v (semi-implicit Euler for stability)
         double dx = _banX - targetX;
@@ -345,8 +349,9 @@ public partial class MainWindow : Window
     {
         if (_rope == null) return;
 
-        double sx = _charX + _charW * 0.85;
-        double sy = _charY + CharHeight * 0.35;
+        int ropeFrame = (int)(_elapsed * SpriteFPS) % _sprites!.FrameCount;
+        double sx = _charX + HandXN[ropeFrame] * _charW;
+        double sy = _charY + HandYN[ropeFrame] * CharHeight;
         double ex = _banX;
         double ey = _banY + 10;
 

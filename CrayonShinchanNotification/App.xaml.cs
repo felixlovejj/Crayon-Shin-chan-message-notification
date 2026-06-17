@@ -16,13 +16,36 @@ public partial class App : WpfApplication
     private MainWindow? _mainWindow;
     private Thread? _apiThread;
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
+    private AutoUpdater? _autoUpdater;
 
     protected override void OnStartup(StartupEventArgs e)
     {
         base.OnStartup(e);
 
+        // Initialize auto updater
+        _autoUpdater = new AutoUpdater();
+        _autoUpdater.OnUpdateAvailable += version =>
+        {
+            _notifyIcon?.ShowBalloonTip(3000, "发现新版本", $"v{version} 可用，正在自动更新...", System.Windows.Forms.ToolTipIcon.Info);
+        };
+        _autoUpdater.OnUpdateProgress += message =>
+        {
+            Console.WriteLine($"[更新] {message}");
+        };
+        _autoUpdater.OnUpdateError += error =>
+        {
+            _notifyIcon?.ShowBalloonTip(3000, "更新失败", error, System.Windows.Forms.ToolTipIcon.Error);
+        };
+
         // Setup system tray icon
         SetupSystemTray();
+
+        // Check for updates on startup (in background)
+        _ = Task.Run(async () =>
+        {
+            await Task.Delay(3000); // Wait 3 seconds after startup
+            await _autoUpdater.CheckForUpdatesAsync();
+        });
 
         // Start API server in background
         _apiThread = new Thread(StartApiServer)
@@ -84,6 +107,15 @@ public partial class App : WpfApplication
                 });
             });
         });
+        menu.Items.Add("检查更新", null, async (s, ev) =>
+        {
+            if (_autoUpdater != null)
+            {
+                _notifyIcon?.ShowBalloonTip(2000, "检查更新", "正在检查...", System.Windows.Forms.ToolTipIcon.Info);
+                await _autoUpdater.CheckForUpdatesAsync();
+            }
+        });
+        menu.Items.Add($"版本: {_autoUpdater?.GetCurrentVersionString() ?? "1.0.0"}", null, (s, ev) => { });
         menu.Items.Add("-"); // Separator
         menu.Items.Add("退出", null, (s, ev) =>
         {
@@ -195,6 +227,24 @@ public partial class App : WpfApplication
 
         // GET /health
         app.MapGet("/health", () => Results.Ok(new { status = "running" }));
+
+        // GET /api/version - get current version
+        app.MapGet("/api/version", () => Results.Ok(new
+        {
+            version = _autoUpdater?.GetCurrentVersionString() ?? "1.0.0",
+            app = "CrayonShinchanNotification"
+        }));
+
+        // POST /api/check-update - manually trigger update check
+        app.MapPost("/api/check-update", async () =>
+        {
+            if (_autoUpdater != null)
+            {
+                await _autoUpdater.CheckForUpdatesAsync();
+                return Results.Ok(new { status = "ok", message = "Update check triggered" });
+            }
+            return Results.BadRequest(new { error = "Updater not initialized" });
+        });
 
         Console.WriteLine("=========================================");
         Console.WriteLine("  Crayon Shin-chan Notification");
