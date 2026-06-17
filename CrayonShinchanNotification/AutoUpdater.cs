@@ -17,6 +17,9 @@ public class AutoUpdater
     private readonly string _currentVersion;
     private readonly string _appDirectory;
     private readonly string _tempDirectory;
+    private readonly string _cacheFile;
+
+    private static readonly TimeSpan CheckInterval = TimeSpan.FromHours(24);
 
     public event Action<string>? OnUpdateAvailable;
     public event Action<string>? OnUpdateProgress;
@@ -28,6 +31,7 @@ public class AutoUpdater
         _currentVersion = GetCurrentVersion();
         _appDirectory = AppDomain.CurrentDomain.BaseDirectory;
         _tempDirectory = Path.Combine(Path.GetTempPath(), "CrayonShinchanUpdater");
+        _cacheFile = Path.Combine(_tempDirectory, "last_check.txt");
     }
 
     private string GetCurrentVersion()
@@ -53,19 +57,41 @@ public class AutoUpdater
     {
         try
         {
+            // Skip if checked recently
+            if (File.Exists(_cacheFile))
+            {
+                var lastCheck = File.ReadAllText(_cacheFile).Trim();
+                if (DateTime.TryParse(lastCheck, out var last) && DateTime.Now - last < CheckInterval)
+                    return;
+            }
+
             OnUpdateProgress?.Invoke("正在检查更新...");
 
             var url = $"https://api.github.com/repos/{GitHubOwner}/{GitHubRepo}/releases/latest";
             _httpClient.DefaultRequestHeaders.UserAgent.ParseAdd("CrayonShinchanNotification");
 
-            var response = await _httpClient.GetStringAsync(url);
-            var release = JsonSerializer.Deserialize<GitHubRelease>(response);
+            var response = await _httpClient.GetAsync(url);
 
-            if (release == null || string.IsNullOrEmpty(release.TagName))
+            // Save check time on success (including 403 - don't spam)
+            SaveCheckTime();
+
+            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
             {
-                OnUpdateError?.Invoke("无法获取版本信息");
+                // No releases yet, silently ignore
                 return;
             }
+
+            if (!response.IsSuccessStatusCode)
+            {
+                // Rate limit or other error - silently ignore
+                return;
+            }
+
+            var json = await response.Content.ReadAsStringAsync();
+            var release = JsonSerializer.Deserialize<GitHubRelease>(json);
+
+            if (release == null || string.IsNullOrEmpty(release.TagName))
+                return;
 
             var latestVersion = release.TagName.TrimStart('v');
             if (IsNewerVersion(latestVersion, _currentVersion))
@@ -73,19 +99,21 @@ public class AutoUpdater
                 OnUpdateAvailable?.Invoke(latestVersion);
                 await DownloadAndInstallAsync(release, latestVersion);
             }
-            else
-            {
-                OnUpdateProgress?.Invoke("已是最新版本");
-            }
         }
-        catch (HttpRequestException ex)
+        catch
         {
-            OnUpdateError?.Invoke($"网络错误: {ex.Message}");
+            // Network error - silently ignore
         }
-        catch (Exception ex)
+    }
+
+    private void SaveCheckTime()
+    {
+        try
         {
-            OnUpdateError?.Invoke($"检查更新失败: {ex.Message}");
+            Directory.CreateDirectory(_tempDirectory);
+            File.WriteAllText(_cacheFile, DateTime.Now.ToString("o"));
         }
+        catch { }
     }
 
     private bool IsNewerVersion(string remoteVersion, string localVersion)
