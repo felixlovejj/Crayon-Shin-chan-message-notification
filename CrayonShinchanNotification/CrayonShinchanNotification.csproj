@@ -18,7 +18,6 @@
     <Content Include="shinchan.gif" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="shinchan_run.gif" CopyToOutputDirectory="PreserveNewest" />
     <Content Include="version.json" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="config.json" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
 </Project>

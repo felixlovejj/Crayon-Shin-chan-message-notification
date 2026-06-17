@@ -367,8 +367,8 @@ public class ApiMessage
 
 public class AppConfig
 {
-    public bool RelayMode { get; set; } = false;
-    public string RelayUrl { get; set; } = "";
-    public string ClientName { get; set; } = Environment.MachineName;
+    public bool RelayMode { get; set; } = true;
+    public string RelayUrl { get; set; } = "ws://YOUR_SERVER_IP:8080";
+    public string ClientName { get; set; } = "Girlfriend";
     public string ApiKey { get; set; } = "shinchan2024";
 }
