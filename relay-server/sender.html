@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蜡笔小新 - 发送消息</title>
+    <style>
+        :root { --primary: #CC0000; --bg: #f5f5f5; --card: #fff; --text: #333; --border: #e0e0e0; }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: -apple-system, "Microsoft YaHei", sans-serif; background: var(--bg); display: flex; justify-content: center; align-items: center; min-height: 100vh; padding: 20px; }
+        .container { width: 100%; max-width: 460px; }
+        .header { text-align: center; margin-bottom: 24px; }
+        .header h1 { font-size: 26px; color: var(--primary); }
+        .header p { color: #888; font-size: 13px; margin-top: 6px; }
+        .card { background: var(--card); border-radius: 16px; padding: 28px; box-shadow: 0 4px 20px rgba(0,0,0,0.08); }
+        .form-group { margin-bottom: 16px; }
+        .form-group label { display: block; font-size: 13px; color: #666; margin-bottom: 6px; font-weight: 500; }
+        .form-group input, .form-group textarea { width: 100%; padding: 11px 14px; border: 2px solid var(--border); border-radius: 10px; font-size: 15px; font-family: inherit; outline: none; transition: border-color 0.2s; }
+        .form-group input:focus, .form-group textarea:focus { border-color: var(--primary); }
+        .form-group textarea { min-height: 100px; resize: vertical; }
+        .tabs { display: flex; gap: 8px; margin-bottom: 18px; }
+        .tab { flex: 1; padding: 10px; border: 2px solid var(--border); border-radius: 10px; background: transparent; cursor: pointer; font-size: 14px; font-weight: 500; color: #888; transition: all 0.2s; }
+        .tab:hover { border-color: var(--primary); color: var(--primary); }
+        .tab.active { background: var(--primary); border-color: var(--primary); color: #fff; }
+        .tab-content { display: none; }
+        .tab-content.active { display: block; }
+        .drop-zone { border: 2px dashed var(--border); border-radius: 10px; padding: 32px 16px; text-align: center; cursor: pointer; transition: all 0.2s; background: #fafafa; }
+        .drop-zone:hover, .drop-zone.dragover { border-color: var(--primary); background: #fff5f5; }
+        .preview-area { margin-top: 12px; display: none; }
+        .preview-area.active { display: block; }
+        .preview-image { max-width: 100%; max-height: 160px; border-radius: 8px; border: 2px solid var(--border); }
+        .preview-info { display: flex; justify-content: space-between; align-items: center; margin-top: 6px; font-size: 12px; color: #888; }
+        .remove-btn { background: none; border: none; color: var(--primary); cursor: pointer; font-size: 12px; }
+        .send-btn { width: 100%; padding: 13px; background: var(--primary); color: #fff; border: none; border-radius: 10px; font-size: 16px; font-weight: 600; cursor: pointer; margin-top: 18px; transition: background 0.2s; }
+        .send-btn:hover { background: #AA0000; }
+        .send-btn:disabled { background: #ccc; cursor: not-allowed; }
+        .status { margin-top: 14px; padding: 10px; border-radius: 8px; font-size: 13px; text-align: center; display: none; }
+        .status.show { display: block; }
+        .status.success { background: #e8f5e9; color: #2e7d32; }
+        .status.error { background: #ffebee; color: #c62828; }
+        .status.loading { background: #fff3e0; color: #e65100; }
+        .clients { text-align: center; margin-top: 16px; font-size: 12px; color: #aaa; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>蜡笔小新消息通知</h1>
+            <p>发送消息到中继服务器</p>
+        </div>
+        <div class="card">
+            <div class="form-group">
+                <label>API Key</label>
+                <input type="password" id="apiKey" placeholder="输入 API Key">
+            </div>
+            <div class="tabs">
+                <button class="tab active" onclick="switchTab('text')">文字</button>
+                <button class="tab" onclick="switchTab('image')">图片</button>
+            </div>
+            <div id="text-tab" class="tab-content active">
+                <div class="form-group">
+                    <textarea id="msgInput" placeholder="输入消息...&#10;按 Enter 发送，Shift+Enter 换行"></textarea>
+                </div>
+            </div>
+            <div id="image-tab" class="tab-content">
+                <div class="drop-zone" onclick="document.getElementById('fileInput').click()">
+                    <div style="font-size:36px;margin-bottom:8px"> </div>
+                    <div style="color:#888;font-size:13px"><strong>点击选择图片</strong> 或拖拽到这里</div>
+                </div>
+                <input type="file" id="fileInput" style="display:none" accept="image/*">
+                <div class="preview-area" id="previewArea">
+                    <img id="previewImg" class="preview-image">
+                    <div class="preview-info">
+                        <span id="fileInfo"></span>
+                        <button class="remove-btn" onclick="removeImage()">移除</button>
+                    </div>
+                </div>
+            </div>
+            <button class="send-btn" id="sendBtn" onclick="send()">发送</button>
+            <div class="status" id="status"></div>
+            <div class="clients" id="clients"></div>
+        </div>
+    </div>
+    <script>
+        let currentTab = 'text', selectedFile = null, selectedBase64 = null;
+        const apiBase = window.location.origin;
+
+        // Load saved API key
+        const savedKey = localStorage.getItem('shinchan_api_key');
+        if (savedKey) document.getElementById('apiKey').value = savedKey;
+        document.getElementById('apiKey').addEventListener('input', e => localStorage.setItem('shinchan_api_key', e.target.value));
+
+        // Health check
+        fetch(apiBase + '/health').then(r => r.json()).then(d => {
+            document.getElementById('clients').textContent = `已连接设备: ${d.clients || 0}`;
+        }).catch(() => {});
+
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelectorAll('.tab')[tab === 'text' ? 0 : 1].classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(tab + '-tab').classList.add('active');
+        }
+
+        document.getElementById('fileInput').addEventListener('change', e => { if (e.target.files[0]) processFile(e.target.files[0]); });
+
+        const dropZone = document.querySelector('.drop-zone');
+        dropZone.addEventListener('dragover', e => { e.preventDefault(); dropZone.classList.add('dragover'); });
+        dropZone.addEventListener('dragleave', () => dropZone.classList.remove('dragover'));
+        dropZone.addEventListener('drop', e => {
+            e.preventDefault(); dropZone.classList.remove('dragover');
+            const f = e.dataTransfer.files[0];
+            if (f && f.type.startsWith('image/')) processFile(f);
+        });
+
+        document.addEventListener('paste', e => {
+            for (const item of e.clipboardData.items) {
+                if (item.type.startsWith('image/')) { processFile(item.getAsFile()); switchTab('image'); break; }
+            }
+        });
+
+        function processFile(file) {
+            if (file.size > 5 * 1024 * 1024) { showStatus('文件太大（最大 5MB）', 'error'); return; }
+            selectedFile = file;
+            const reader = new FileReader();
+            reader.onload = e => {
+                selectedBase64 = e.target.result.split(',')[1];
+                document.getElementById('previewImg').src = e.target.result;
+                document.getElementById('fileInfo').textContent = `${file.name} (${(file.size/1024).toFixed(1)} KB)`;
+                document.getElementById('previewArea').classList.add('active');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        function removeImage() {
+            selectedFile = null; selectedBase64 = null;
+            document.getElementById('previewArea').classList.remove('active');
+            document.getElementById('fileInput').value = '';
+        }
+
+        document.getElementById('msgInput').addEventListener('keydown', e => {
+            if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); send(); }
+        });
+
+        async function send() {
+            const btn = document.getElementById('sendBtn');
+            const key = document.getElementById('apiKey').value.trim();
+            if (!key) { showStatus('请输入 API Key', 'error'); return; }
+            btn.disabled = true;
+            try {
+                if (currentTab === 'text') {
+                    const content = document.getElementById('msgInput').value.trim();
+                    if (!content) { showStatus('请输入消息', 'error'); return; }
+                    showStatus('发送中...', 'loading');
+                    const r = await fetch(apiBase + '/api/send', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json', 'X-Api-Key': key },
+                        body: JSON.stringify({ type: 'text', content })
+                    });
+                    if (r.ok) { showStatus('发送成功！', 'success'); document.getElementById('msgInput').value = ''; }
+                    else { const e = await r.json(); showStatus('失败: ' + (e.error || ''), 'error'); }
+                } else {
+                    if (!selectedFile) { showStatus('请先选择图片', 'error'); return; }
+                    showStatus('上传中...', 'loading');
+                    const fd = new FormData(); fd.append('file', selectedFile);
+                    const r = await fetch(apiBase + '/api/send-image', {
+                        method: 'POST', headers: { 'X-Api-Key': key }, body: fd
+                    });
+                    if (r.ok) { showStatus('图片发送成功！', 'success'); removeImage(); }
+                    else { const e = await r.json(); showStatus('失败: ' + (e.error || ''), 'error'); }
+                }
+            } catch (err) { showStatus('网络错误: ' + err.message, 'error'); }
+            finally { btn.disabled = false; }
+        }
+
+        function showStatus(msg, type) {
+            const s = document.getElementById('status');
+            s.textContent = msg; s.className = 'status show ' + type;
+            if (type === 'success') setTimeout(() => s.classList.remove('show'), 3000);
+        }
+    </script>
+</body>
+</html>

@@ -40,25 +40,50 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 ### 远程访问（给女朋友用）
 
-程序启动后监听在 `0.0.0.0:8000`，支持从外部访问。
+#### 推荐方案：中继模式（她那边零操作）
 
-#### 方法一：ngrok 隧道（最简单）
+1. 你在云服务器上部署中继服务器（见下方）
+2. 在她电脑上创建启动脚本或设置环境变量后运行程序
+3. 她只需双击运行 exe，自动连接中继接收消息
+4. 你打开中继服务器的 Web 界面发送消息
 
-1. 在女朋友电脑上安装 [ngrok](https://ngrok.com/)
-2. 启动程序后，运行：`ngrok http 8000`
-3. 复制公网地址（如 `https://xxxx.ngrok-free.app`）发给你
-4. 你在浏览器打开该地址，输入 API Key 即可发送消息
+**她电脑上的操作（一次性）：**
 
-#### 方法二：Cloudflare Tunnel（免费稳定）
+创建 `start.bat` 放在 exe 同目录：
+```bat
+set RELAY_MODE=true
+set RELAY_URL=ws://你的云服务器IP:8080
+set CLIENT_NAME=女朋友
+CrayonShinchanNotification.exe
+```
 
-1. 安装 [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
-2. 运行：`cloudflared tunnel --url http://localhost:8000`
-3. 复制公网地址（如 `https://xxx.trycloudflare.com`）
+或设置系统环境变量后直接运行 exe。
 
-#### 方法三：路由器端口转发
+**部署中继服务器（你的云服务器）：**
 
-1. 在路由器设置中将外网 8000 端口转发到女朋友电脑的内网 IP:8000
-2. 通过你的公网 IP:8000 访问
+```bash
+cd relay-server
+npm install
+# 启动（默认端口 8080）
+node server.js
+
+# 或自定义端口和 API Key
+RELAY_PORT=9090 RELAY_API_KEY=你的密码 node server.js
+```
+
+启动后：
+- 打开 `http://你的IP:8080` 即为发送消息的 Web 界面
+- 她的电脑通过 WebSocket 连接到同一端口接收消息
+
+#### 其他方案
+
+**ngrok 隧道：**
+1. 在她电脑上安装 [ngrok](https://ngrok.com/)
+2. 启动程序后运行：`ngrok http 8000`
+3. 复制公网地址发给你
+
+**路由器端口转发：**
+1. 在路由器设置中将外网 8000 端口转发到她电脑的内网 IP:8000
 
 ## 📖 使用方法
 
@@ -122,12 +147,19 @@ curl -X POST http://127.0.0.1:8000/api/send-image \
 Crayon Shin-chan message notification/
 ├── CrayonShinchanNotification/
 │   ├── CrayonShinchanNotification.csproj  # 项目文件
-│   ├── App.xaml / App.xaml.cs             # 应用入口 + API 服务器
+│   ├── App.xaml / App.xaml.cs             # 应用入口 + API 服务器 + Relay 客户端
 │   ├── MainWindow.xaml / MainWindow.xaml.cs # 透明覆盖窗口 + 动画引擎
+│   ├── AutoUpdater.cs                     # 自动更新
 │   ├── MessageData.cs                     # 消息数据模型
 │   └── wwwroot/
-│       └── index.html                     # Web 前端界面
+│       └── index.html                     # Web 前端界面（本地模式）
+├── relay-server/
+│   ├── server.js                          # 中继服务器（WebSocket + HTTP API）
+│   ├── sender.html                        # 发送消息的 Web 界面
+│   ├── package.json                       # Node.js 依赖
+│   └── start.bat                          # Windows 启动脚本
 ├── test_api.bat                           # API 测试脚本
+├── .github/workflows/build.yml            # CI 自动构建
 ├── .gitignore
 └── README.md
 ```

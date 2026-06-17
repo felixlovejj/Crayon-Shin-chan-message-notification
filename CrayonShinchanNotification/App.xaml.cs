@@ -1,10 +1,12 @@
 using System.Drawing;
 using System.IO;
+using System.Net.WebSockets;
 using System.Windows;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
+using System.Text.Json;
 using WpfApplication = System.Windows.Application;
 using DrawingFontFamily = System.Drawing.FontFamily;
 using DrawingFontStyle = System.Drawing.FontStyle;
@@ -17,6 +19,13 @@ public partial class App : WpfApplication
     private Thread? _apiThread;
     private System.Windows.Forms.NotifyIcon? _notifyIcon;
     private AutoUpdater? _autoUpdater;
+    private ClientWebSocket? _relaySocket;
+
+    // Relay mode config
+    private static readonly bool RelayMode = Environment.GetEnvironmentVariable("RELAY_MODE") == "true";
+    private static readonly string RelayUrl = Environment.GetEnvironmentVariable("RELAY_URL") ?? "";
+    private static readonly string ClientName = Environment.GetEnvironmentVariable("CLIENT_NAME") ?? Environment.MachineName;
+    private static readonly string RelayApiKey = Environment.GetEnvironmentVariable("SHINCHAN_API_KEY") ?? "shinchan2024";
 
     protected override void OnStartup(StartupEventArgs e)
     {
@@ -47,7 +56,7 @@ public partial class App : WpfApplication
             await _autoUpdater.CheckForUpdatesAsync();
         });
 
-        // Start API server in background
+        // Start API server in background (always run for local access)
         _apiThread = new Thread(StartApiServer)
         {
             IsBackground = true,
@@ -55,9 +64,55 @@ public partial class App : WpfApplication
         };
         _apiThread.Start();
 
+        // Start relay connection if configured
+        if (RelayMode && !string.IsNullOrEmpty(RelayUrl))
+        {
+            _ = Task.Run(async () =>
+            {
+                try { await ConnectToRelay(); }
+                catch { }
+            });
+        }
+
         // Create and show main window
         _mainWindow = new MainWindow();
         _mainWindow.Show();
+    }
+
+    private async Task ConnectToRelay()
+    {
+        while (true)
+        {
+            try
+            {
+                _relaySocket = new ClientWebSocket();
+                var url = $"{RelayUrl}?name={Uri.EscapeDataString(ClientName)}";
+                await _relaySocket.ConnectAsync(new Uri(url), CancellationToken.None);
+                Console.WriteLine($"[Relay] 已连接到中继服务器: {RelayUrl}");
+
+                _notifyIcon?.ShowBalloonTip(2000, "已连接", "中继服务器连接成功", System.Windows.Forms.ToolTipIcon.Info);
+
+                var buffer = new byte[4096];
+                while (_relaySocket.State == WebSocketState.Open)
+                {
+                    var result = await _relaySocket.ReceiveAsync(new ArraySegment<byte>(buffer), CancellationToken.None);
+                    if (result.MessageType == WebSocketMessageType.Text)
+                    {
+                        var json = System.Text.Encoding.UTF8.GetString(buffer, 0, result.Count);
+                        var msg = JsonSerializer.Deserialize<MessageData>(json);
+                        if (msg != null)
+                        {
+                            _ = Dispatcher.BeginInvoke(() => _mainWindow?.TriggerAnimation(msg));
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                Console.WriteLine($"[Relay] 连接失败: {ex.Message}, 5秒后重试...");
+                await Task.Delay(5000);
+            }
+        }
     }
 
     private void SetupSystemTray()
@@ -266,10 +321,18 @@ public partial class App : WpfApplication
 
         Console.WriteLine("=========================================");
         Console.WriteLine("  Crayon Shin-chan Notification");
-        Console.WriteLine("  API:  http://0.0.0.0:8000");
-        Console.WriteLine("  Web:  http://localhost:8000/");
-        Console.WriteLine($"  API Key: {apiKey}");
-        Console.WriteLine("  (可通过环境变量 SHINCHAN_API_KEY 修改)");
+        if (RelayMode)
+        {
+            Console.WriteLine("  Mode:  Relay (中继模式)");
+            Console.WriteLine($"  Relay: {RelayUrl}");
+            Console.WriteLine($"  Name:  {ClientName}");
+        }
+        else
+        {
+            Console.WriteLine("  API:  http://0.0.0.0:8000");
+            Console.WriteLine("  Web:  http://localhost:8000/");
+        }
+        Console.WriteLine($"  API Key: {RelayApiKey}");
         Console.WriteLine("  托盘图标右键可以退出程序");
         Console.WriteLine("=========================================");
 
@@ -278,6 +341,7 @@ public partial class App : WpfApplication
 
     protected override void OnExit(ExitEventArgs e)
     {
+        _relaySocket?.Dispose();
         _notifyIcon?.Dispose();
         base.OnExit(e);
         Environment.Exit(0);
