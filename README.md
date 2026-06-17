@@ -38,6 +38,28 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 # 生成的文件在 bin/Release/net9.0-windows/win-x64/publish/CrayonShinchanNotification.exe
 ```
 
+### 远程访问（给女朋友用）
+
+程序启动后监听在 `0.0.0.0:8000`，支持从外部访问。
+
+#### 方法一：ngrok 隧道（最简单）
+
+1. 在女朋友电脑上安装 [ngrok](https://ngrok.com/)
+2. 启动程序后，运行：`ngrok http 8000`
+3. 复制公网地址（如 `https://xxxx.ngrok-free.app`）发给你
+4. 你在浏览器打开该地址，输入 API Key 即可发送消息
+
+#### 方法二：Cloudflare Tunnel（免费稳定）
+
+1. 安装 [cloudflared](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/downloads/)
+2. 运行：`cloudflared tunnel --url http://localhost:8000`
+3. 复制公网地址（如 `https://xxx.trycloudflare.com`）
+
+#### 方法三：路由器端口转发
+
+1. 在路由器设置中将外网 8000 端口转发到女朋友电脑的内网 IP:8000
+2. 通过你的公网 IP:8000 访问
+
 ## 📖 使用方法
 
 ### 1. 启动应用
@@ -66,11 +88,14 @@ dotnet publish -c Release -r win-x64 --self-contained true -p:PublishSingleFile=
 
 ### 4. 通过 API 调用
 
+> ⚠️ 发送消息的 API 需要携带 API Key（通过环境变量 `SHINCHAN_API_KEY` 设置，默认值 `shinchan2024`）
+
 #### 发送文字
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/send \
      -H "Content-Type: application/json" \
+     -H "X-Api-Key: shinchan2024" \
      -d '{"type":"text","content":"你好，蜡笔小新！"}'
 ```
 
@@ -79,6 +104,7 @@ curl -X POST http://127.0.0.1:8000/api/send \
 ```bash
 curl -X POST http://127.0.0.1:8000/api/send \
      -H "Content-Type: application/json" \
+     -H "X-Api-Key: shinchan2024" \
      -d '{"type":"image","content":"iVBORw0KGgo..."}'
 ```
 
@@ -86,6 +112,7 @@ curl -X POST http://127.0.0.1:8000/api/send \
 
 ```bash
 curl -X POST http://127.0.0.1:8000/api/send-image \
+     -H "X-Api-Key: shinchan2024" \
      -F "file=@image.png"
 ```
 
@@ -131,8 +158,22 @@ Crayon Shin-chan message notification/
 修改 `App.xaml.cs` 中的端口号：
 
 ```csharp
-Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://127.0.0.1:8000");
+Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://0.0.0.0:8000");
 ```
+
+### API Key
+
+通过环境变量设置 API Key（用于保护发送消息接口）：
+
+```bash
+# Windows PowerShell
+$env:SHINCHAN_API_KEY="your_secret_key"
+
+# Windows CMD
+set SHINCHAN_API_KEY=your_secret_key
+```
+
+默认值：`shinchan2024`
 
 ### 动画时长
 
@@ -154,7 +195,13 @@ private const int CharScale = 4; // 像素缩放倍数
 
 ### POST /api/send
 
-发送文字或图片消息。
+发送文字或图片消息。需要 `X-Api-Key` 请求头。
+
+**请求头：**
+```
+X-Api-Key: shinchan2024
+Content-Type: application/json
+```
 
 **请求体：**
 ```json
@@ -174,7 +221,12 @@ private const int CharScale = 4; // 像素缩放倍数
 
 ### POST /api/send-image
 
-上传图片文件。
+上传图片文件。需要 `X-Api-Key` 请求头。
+
+**请求头：**
+```
+X-Api-Key: shinchan2024
+```
 
 **请求：** `multipart/form-data`，字段名 `file`
 

@@ -269,6 +269,32 @@
             font-size: 12px;
         }
 
+        .api-key-section {
+            margin-bottom: 16px;
+        }
+
+        .api-key-section label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+
+        .api-key-section input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: "Consolas", "Courier New", monospace;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .api-key-section input:focus {
+            border-color: var(--primary);
+        }
+
         .hidden-input {
             display: none;
         }
@@ -282,6 +308,11 @@
         </div>
 
         <div class="card">
+            <div class="api-key-section">
+                <label>🔑 API Key</label>
+                <input type="password" id="apiKeyInput" placeholder="输入 API Key" value="">
+            </div>
+
             <div class="tabs">
                 <button class="tab active" data-tab="text" onclick="switchTab('text')">📝 文字</button>
                 <button class="tab" data-tab="image" onclick="switchTab('image')">🖼️ 图片</button>
@@ -441,11 +472,20 @@
                 return;
             }
 
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (!apiKey) {
+                showStatus('请输入 API Key', 'error');
+                return;
+            }
+
             showStatus('发送中...', 'loading');
 
             const resp = await fetch('/api/send', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Api-Key': apiKey
+                },
                 body: JSON.stringify({ type: 'text', content: content })
             });
 
@@ -464,6 +504,12 @@
                 return;
             }
 
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (!apiKey) {
+                showStatus('请输入 API Key', 'error');
+                return;
+            }
+
             showStatus('上传中...', 'loading');
 
             const formData = new FormData();
@@ -471,6 +517,9 @@
 
             const resp = await fetch('/api/send-image', {
                 method: 'POST',
+                headers: {
+                    'X-Api-Key': apiKey
+                },
                 body: formData
             });
 
@@ -499,6 +548,15 @@
         fetch('/health').then(r => {
             if (!r.ok) console.warn('API server not responding');
         }).catch(() => console.warn('API server not available'));
+
+        // Load saved API key from localStorage
+        const savedKey = localStorage.getItem('shinchan_api_key');
+        if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+
+        // Save API key to localStorage on change
+        document.getElementById('apiKeyInput').addEventListener('input', (e) => {
+            localStorage.setItem('shinchan_api_key', e.target.value);
+        });
     </script>
 </body>
 </html>

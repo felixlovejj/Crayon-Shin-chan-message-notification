@@ -10,8 +10,8 @@ namespace CrayonShinchanNotification;
 public class AutoUpdater
 {
     // TODO: 替换为你的 GitHub 仓库信息
-    private const string GitHubOwner = "YOUR_GITHUB_USERNAME";
-    private const string GitHubRepo = "YOUR_REPO_NAME";
+    private const string GitHubOwner = "felixlovejj";
+    private const string GitHubRepo = "Crayon-Shin-chan-message-notification";
 
     private static readonly HttpClient _httpClient = new();
     private readonly string _currentVersion;
@@ -26,13 +26,13 @@ public class AutoUpdater
     public AutoUpdater()
     {
         _currentVersion = GetCurrentVersion();
-        _appDirectory = AppContext.BaseDirectory;
+        _appDirectory = AppDomain.CurrentDomain.BaseDirectory;
         _tempDirectory = Path.Combine(Path.GetTempPath(), "CrayonShinchanUpdater");
     }
 
     private string GetCurrentVersion()
     {
-        var versionFile = Path.Combine(_appDirectory, "version.json");
+        var versionFile = Path.Combine(AppDomain.CurrentDomain.BaseDirectory, "version.json");
         if (File.Exists(versionFile))
         {
             try

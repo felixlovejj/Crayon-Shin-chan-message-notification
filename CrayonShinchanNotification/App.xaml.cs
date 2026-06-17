@@ -139,8 +139,9 @@ public partial class App : WpfApplication
 
     private void StartApiServer()
     {
-        // Configure URL via environment variable
-        Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://127.0.0.1:8000");
+        // Configure URL - listen on all interfaces for remote access
+        var apiKey = Environment.GetEnvironmentVariable("SHINCHAN_API_KEY") ?? "shinchan2024";
+        Environment.SetEnvironmentVariable("ASPNETCORE_URLS", "http://0.0.0.0:8000");
 
         var builder = WebApplication.CreateBuilder();
 
@@ -151,6 +152,23 @@ public partial class App : WpfApplication
 
         // CORS for local development
         app.UseCors(policy => policy.AllowAnyOrigin().AllowAnyMethod().AllowAnyHeader());
+
+        // API Key authentication middleware
+        app.Use(async (context, next) =>
+        {
+            var path = context.Request.Path.Value ?? "";
+            // Only require API key for message sending endpoints
+            if (path.StartsWith("/api/send"))
+            {
+                if (!context.Request.Headers.TryGetValue("X-Api-Key", out var key) || key != apiKey)
+                {
+                    context.Response.StatusCode = 401;
+                    await context.Response.WriteAsJsonAsync(new { error = "Invalid or missing API key" });
+                    return;
+                }
+            }
+            await next();
+        });
 
         // Serve static files (frontend)
         var staticPath = Path.Combine(AppContext.BaseDirectory, "wwwroot");
@@ -248,8 +266,10 @@ public partial class App : WpfApplication
 
         Console.WriteLine("=========================================");
         Console.WriteLine("  Crayon Shin-chan Notification");
-        Console.WriteLine("  API:  http://127.0.0.1:8000");
-        Console.WriteLine("  Web:  http://127.0.0.1:8000/");
+        Console.WriteLine("  API:  http://0.0.0.0:8000");
+        Console.WriteLine("  Web:  http://localhost:8000/");
+        Console.WriteLine($"  API Key: {apiKey}");
+        Console.WriteLine("  (可通过环境变量 SHINCHAN_API_KEY 修改)");
         Console.WriteLine("  托盘图标右键可以退出程序");
         Console.WriteLine("=========================================");
 

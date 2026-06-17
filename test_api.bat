@@ -10,7 +10,7 @@ echo.
 echo.
 
 echo [2] Sending test text message...
-curl -s -X POST http://127.0.0.1:8000/api/send -H "Content-Type: application/json" -d "{\"type\":\"text\",\"content\":\"Hello from test script!\"}"
+curl -s -X POST http://127.0.0.1:8000/api/send -H "Content-Type: application/json" -H "X-Api-Key: shinchan2024" -d "{\"type\":\"text\",\"content\":\"Hello from test script!\"}"
 echo.
 echo.
 
