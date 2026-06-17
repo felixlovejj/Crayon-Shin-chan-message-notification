@@ -1,6 +1,6 @@
 {
   "RelayMode": false,
-  "RelayUrl": "ws://YOUR_SERVER_IP:8080",
+  "RelayUrl": "ws://82.156.107.210:8083",
   "ClientName": "Girlfriend",
   "ApiKey": "shinchan2024"
 }
