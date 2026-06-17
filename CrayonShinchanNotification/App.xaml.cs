@@ -7,6 +7,7 @@ using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.FileProviders;
 using System.Text.Json;
+using System.Text.Json.Serialization;
 using WpfApplication = System.Windows.Application;
 using DrawingFontFamily = System.Drawing.FontFamily;
 using DrawingFontStyle = System.Drawing.FontStyle;
@@ -361,14 +362,17 @@ public partial class App : WpfApplication
 
 public class ApiMessage
 {
+    [JsonPropertyName("type")]
     public string Type { get; set; } = "text";
+
+    [JsonPropertyName("content")]
     public string Content { get; set; } = "";
 }
 
 public class AppConfig
 {
     public bool RelayMode { get; set; } = true;
-    public string RelayUrl { get; set; } = "ws://YOUR_SERVER_IP:8080";
+    public string RelayUrl { get; set; } = "ws://82.156.107.210:8083";
     public string ClientName { get; set; } = "Girlfriend";
     public string ApiKey { get; set; } = "shinchan2024";
 }
