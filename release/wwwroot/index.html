@@ -1,0 +1,562 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>蜡笔小新消息通知</title>
+    <style>
+        :root {
+            --primary: #CC0000;
+            --primary-hover: #AA0000;
+            --bg: #f5f5f5;
+            --card-bg: #ffffff;
+            --text: #333333;
+            --text-light: #666666;
+            --border: #e0e0e0;
+            --success: #4CAF50;
+            --shadow: 0 4px 20px rgba(0,0,0,0.1);
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", "Microsoft YaHei", sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            padding: 20px;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 500px;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+        }
+
+        .header h1 {
+            font-size: 28px;
+            color: var(--primary);
+            margin-bottom: 8px;
+        }
+
+        .header p {
+            color: var(--text-light);
+            font-size: 14px;
+        }
+
+        .card {
+            background: var(--card-bg);
+            border-radius: 16px;
+            box-shadow: var(--shadow);
+            padding: 30px;
+        }
+
+        .tabs {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+        }
+
+        .tab {
+            flex: 1;
+            padding: 12px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            background: transparent;
+            cursor: pointer;
+            font-size: 15px;
+            font-weight: 500;
+            transition: all 0.2s;
+            color: var(--text-light);
+        }
+
+        .tab:hover {
+            border-color: var(--primary);
+            color: var(--primary);
+        }
+
+        .tab.active {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        .tab-content {
+            display: none;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        textarea {
+            width: 100%;
+            min-height: 120px;
+            padding: 14px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 16px;
+            font-family: inherit;
+            resize: vertical;
+            transition: border-color 0.2s;
+            outline: none;
+        }
+
+        textarea:focus {
+            border-color: var(--primary);
+        }
+
+        textarea::placeholder {
+            color: #aaa;
+        }
+
+        .drop-zone {
+            border: 2px dashed var(--border);
+            border-radius: 10px;
+            padding: 40px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #fafafa;
+        }
+
+        .drop-zone:hover,
+        .drop-zone.dragover {
+            border-color: var(--primary);
+            background: #fff5f5;
+        }
+
+        .drop-zone-icon {
+            font-size: 48px;
+            margin-bottom: 12px;
+        }
+
+        .drop-zone-text {
+            color: var(--text-light);
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .drop-zone-text strong {
+            color: var(--primary);
+        }
+
+        .preview-area {
+            margin-top: 16px;
+            display: none;
+        }
+
+        .preview-area.active {
+            display: block;
+        }
+
+        .preview-image {
+            max-width: 100%;
+            max-height: 200px;
+            border-radius: 8px;
+            border: 2px solid var(--border);
+        }
+
+        .preview-info {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-top: 8px;
+            font-size: 13px;
+            color: var(--text-light);
+        }
+
+        .remove-btn {
+            background: none;
+            border: none;
+            color: var(--primary);
+            cursor: pointer;
+            font-size: 13px;
+            padding: 4px 8px;
+        }
+
+        .remove-btn:hover {
+            text-decoration: underline;
+        }
+
+        .send-btn {
+            width: 100%;
+            padding: 14px;
+            background: var(--primary);
+            color: white;
+            border: none;
+            border-radius: 10px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: background 0.2s;
+            margin-top: 20px;
+        }
+
+        .send-btn:hover {
+            background: var(--primary-hover);
+        }
+
+        .send-btn:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+
+        .send-btn:active {
+            transform: scale(0.98);
+        }
+
+        .status {
+            margin-top: 16px;
+            padding: 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            text-align: center;
+            display: none;
+        }
+
+        .status.show {
+            display: block;
+        }
+
+        .status.success {
+            background: #e8f5e9;
+            color: #2e7d32;
+        }
+
+        .status.error {
+            background: #ffebee;
+            color: #c62828;
+        }
+
+        .status.loading {
+            background: #fff3e0;
+            color: #e65100;
+        }
+
+        .footer {
+            text-align: center;
+            margin-top: 24px;
+            color: var(--text-light);
+            font-size: 13px;
+        }
+
+        .api-info {
+            margin-top: 16px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 8px;
+            font-size: 13px;
+            color: var(--text-light);
+        }
+
+        .api-info code {
+            background: #e9ecef;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: "Consolas", "Courier New", monospace;
+            font-size: 12px;
+        }
+
+        .api-key-section {
+            margin-bottom: 16px;
+        }
+
+        .api-key-section label {
+            display: block;
+            font-size: 13px;
+            color: var(--text-light);
+            margin-bottom: 6px;
+        }
+
+        .api-key-section input {
+            width: 100%;
+            padding: 10px 14px;
+            border: 2px solid var(--border);
+            border-radius: 10px;
+            font-size: 14px;
+            font-family: "Consolas", "Courier New", monospace;
+            outline: none;
+            transition: border-color 0.2s;
+        }
+
+        .api-key-section input:focus {
+            border-color: var(--primary);
+        }
+
+        .hidden-input {
+            display: none;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>🖍️ 蜡笔小新消息通知</h1>
+            <p>发送文字或图片，小新会拉着横幅跑过你的桌面</p>
+        </div>
+
+        <div class="card">
+            <div class="api-key-section">
+                <label>🔑 API Key</label>
+                <input type="password" id="apiKeyInput" placeholder="输入 API Key" value="">
+            </div>
+
+            <div class="tabs">
+                <button class="tab active" data-tab="text" onclick="switchTab('text')">📝 文字</button>
+                <button class="tab" data-tab="image" onclick="switchTab('image')">🖼️ 图片</button>
+            </div>
+
+            <!-- Text Tab -->
+            <div id="text-tab" class="tab-content active">
+                <textarea id="messageInput" placeholder="输入要发送的消息...&#10;&#10;支持中文、emoji 等各种字符&#10;按 Enter 发送，Shift+Enter 换行"></textarea>
+            </div>
+
+            <!-- Image Tab -->
+            <div id="image-tab" class="tab-content">
+                <div class="drop-zone" id="dropZone" onclick="document.getElementById('fileInput').click()">
+                    <div class="drop-zone-icon">📷</div>
+                    <div class="drop-zone-text">
+                        <strong>点击选择图片</strong> 或拖拽图片到这里<br>
+                        也可以直接 <strong>Ctrl+V 粘贴</strong> 剪贴板中的图片
+                    </div>
+                </div>
+                <input type="file" id="fileInput" class="hidden-input" accept="image/*" onchange="handleFileSelect(event)">
+
+                <div class="preview-area" id="previewArea">
+                    <img id="previewImage" class="preview-image" src="" alt="preview">
+                    <div class="preview-info">
+                        <span id="fileInfo"></span>
+                        <button class="remove-btn" onclick="removeImage()">移除</button>
+                    </div>
+                </div>
+            </div>
+
+            <button class="send-btn" id="sendBtn" onclick="sendMessage()">
+                🚀 发送
+            </button>
+
+            <div class="status" id="status"></div>
+        </div>
+
+        <div class="footer">
+            <div class="api-info">
+                <strong>API 接口：</strong><br>
+                发送文字：<code>POST /api/send</code> body: <code>{"type":"text","content":"消息内容"}</code><br>
+                上传图片：<code>POST /api/send-image</code> form-data: <code>file=图片文件</code>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentTab = 'text';
+        let selectedFile = null;
+        let selectedBase64 = null;
+
+        // Tab switching
+        function switchTab(tab) {
+            currentTab = tab;
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            document.querySelector(`.tab[data-tab="${tab}"]`).classList.add('active');
+            document.querySelectorAll('.tab-content').forEach(c => c.classList.remove('active'));
+            document.getElementById(`${tab}-tab`).classList.add('active');
+        }
+
+        // File select handler
+        function handleFileSelect(event) {
+            const file = event.target.files[0];
+            if (file) processFile(file);
+        }
+
+        // Drag and drop
+        const dropZone = document.getElementById('dropZone');
+
+        dropZone.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            dropZone.classList.add('dragover');
+        });
+
+        dropZone.addEventListener('dragleave', () => {
+            dropZone.classList.remove('dragover');
+        });
+
+        dropZone.addEventListener('drop', (e) => {
+            e.preventDefault();
+            dropZone.classList.remove('dragover');
+            const file = e.dataTransfer.files[0];
+            if (file && file.type.startsWith('image/')) {
+                processFile(file);
+            }
+        });
+
+        // Clipboard paste
+        document.addEventListener('paste', (e) => {
+            const items = e.clipboardData.items;
+            for (const item of items) {
+                if (item.type.startsWith('image/')) {
+                    const file = item.getAsFile();
+                    processFile(file);
+                    switchTab('image');
+                    break;
+                }
+            }
+        });
+
+        // Process selected file
+        function processFile(file) {
+            if (file.size > 5 * 1024 * 1024) {
+                showStatus('文件太大，请选择小于 5MB 的图片', 'error');
+                return;
+            }
+
+            selectedFile = file;
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                selectedBase64 = e.target.result.split(',')[1]; // Remove data:image/...;base64, prefix
+                document.getElementById('previewImage').src = e.target.result;
+                document.getElementById('fileInfo').textContent = `${file.name} (${(file.size / 1024).toFixed(1)} KB)`;
+                document.getElementById('previewArea').classList.add('active');
+            };
+            reader.readAsDataURL(file);
+        }
+
+        // Remove selected image
+        function removeImage() {
+            selectedFile = null;
+            selectedBase64 = null;
+            document.getElementById('previewArea').classList.remove('active');
+            document.getElementById('fileInput').value = '';
+        }
+
+        // Keyboard shortcut
+        document.getElementById('messageInput').addEventListener('keydown', (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+                sendMessage();
+            }
+        });
+
+        // Send message
+        async function sendMessage() {
+            const btn = document.getElementById('sendBtn');
+            btn.disabled = true;
+
+            try {
+                if (currentTab === 'text') {
+                    await sendText();
+                } else {
+                    await sendImage();
+                }
+            } catch (err) {
+                showStatus('发送失败: ' + err.message, 'error');
+            } finally {
+                btn.disabled = false;
+            }
+        }
+
+        async function sendText() {
+            const content = document.getElementById('messageInput').value.trim();
+            if (!content) {
+                showStatus('请输入消息内容', 'error');
+                return;
+            }
+
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (!apiKey) {
+                showStatus('请输入 API Key', 'error');
+                return;
+            }
+
+            showStatus('发送中...', 'loading');
+
+            const resp = await fetch('/api/send', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-Api-Key': apiKey
+                },
+                body: JSON.stringify({ type: 'text', content: content })
+            });
+
+            if (resp.ok) {
+                showStatus('✅ 发送成功！小新正在跑~', 'success');
+                document.getElementById('messageInput').value = '';
+            } else {
+                const err = await resp.json();
+                showStatus('发送失败: ' + (err.error || '未知错误'), 'error');
+            }
+        }
+
+        async function sendImage() {
+            if (!selectedFile) {
+                showStatus('请先选择一张图片', 'error');
+                return;
+            }
+
+            const apiKey = document.getElementById('apiKeyInput').value.trim();
+            if (!apiKey) {
+                showStatus('请输入 API Key', 'error');
+                return;
+            }
+
+            showStatus('上传中...', 'loading');
+
+            const formData = new FormData();
+            formData.append('file', selectedFile);
+
+            const resp = await fetch('/api/send-image', {
+                method: 'POST',
+                headers: {
+                    'X-Api-Key': apiKey
+                },
+                body: formData
+            });
+
+            if (resp.ok) {
+                showStatus('✅ 图片发送成功！小新正在跑~', 'success');
+                removeImage();
+            } else {
+                const err = await resp.json();
+                showStatus('发送失败: ' + (err.error || '未知错误'), 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const status = document.getElementById('status');
+            status.textContent = message;
+            status.className = `status show ${type}`;
+
+            if (type === 'success') {
+                setTimeout(() => {
+                    status.classList.remove('show');
+                }, 3000);
+            }
+        }
+
+        // Health check on load
+        fetch('/health').then(r => {
+            if (!r.ok) console.warn('API server not responding');
+        }).catch(() => console.warn('API server not available'));
+
+        // Load saved API key from localStorage
+        const savedKey = localStorage.getItem('shinchan_api_key');
+        if (savedKey) document.getElementById('apiKeyInput').value = savedKey;
+
+        // Save API key to localStorage on change
+        document.getElementById('apiKeyInput').addEventListener('input', (e) => {
+            localStorage.setItem('shinchan_api_key', e.target.value);
+        });
+    </script>
+</body>
+</html>
